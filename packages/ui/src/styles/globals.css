@@ -124,7 +124,27 @@
   * {
     @apply border-border outline-ring/50;
     }
+  html,
   body {
-    @apply bg-background text-foreground;
-    }
+    @apply bg-background text-foreground min-h-svh w-full;
+  }
+  #root {
+    @apply min-h-svh w-full min-w-0;
+  }
+  a[href],
+  button:not(:disabled),
+  [role="button"]:not([aria-disabled="true"]) {
+    @apply cursor-pointer;
+  }
+  button:disabled,
+  [role="button"][aria-disabled="true"] {
+    @apply cursor-not-allowed;
+  }
+  select:not(:disabled) {
+    @apply cursor-pointer;
+  }
+  input[type="checkbox"]:not(:disabled),
+  input[type="radio"]:not(:disabled) {
+    @apply cursor-pointer;
+  }
 }
