@@ -1,5 +1,5 @@
 import { useState } from "react"
-import { Link, useNavigate, useLocation } from "react-router-dom"
+import {  useNavigate, useLocation } from "react-router-dom"
 
 import { Button } from "@workspace/ui/components/button"
 
@@ -61,12 +61,13 @@ export function LoginPage() {
             {pending ? "Signing in…" : "Sign in"}
           </Button>
         </form>
-        <p className="text-muted-foreground mt-4 text-center text-xs">
+        {/* <p className="text-muted-foreground mt-4 text-center text-xs">
           No account?{" "}
           <Link to="/register" className="text-primary font-medium underline-offset-4 hover:underline">
             Create one
           </Link>
-        </p>
+        </p> 
+        */}
       </div>
     </div>
   )

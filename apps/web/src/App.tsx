@@ -5,13 +5,13 @@ import { ProtectedRoute } from "@/components/protected-route"
 import { LoginPage } from "@/pages/login-page"
 import { QRCodesPage } from "@/pages/qr-codes-page"
 import { ReportPage } from "@/pages/report-page"
-import { RegisterPage } from "@/pages/register-page"
+// import { RegisterPage } from "@/pages/register-page"
 
 export function App() {
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
-      <Route path="/register" element={<RegisterPage />} />
+      {/* <Route path="/register" element={<RegisterPage />} /> */}
       <Route
         path="/"
         element={
