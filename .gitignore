@@ -20,7 +20,7 @@ coverage
 .vercel
 
 # Build Outputs
-dist
+# dist
 
 # Debug
 npm-debug.log*
