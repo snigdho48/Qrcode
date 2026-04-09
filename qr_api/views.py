@@ -32,15 +32,7 @@ from .serializers import (
     ScanEventSerializer,
     UserRegisterSerializer,
 )
-from .whatsapp import (
-    configured_destination_number,
-    extract_prefilled_text,
-    extract_whatsapp_number,
-    send_main_menu,
-    send_skin_list,
-    send_text,
-    whatsapp_enabled,
-)
+from .whatsapp import configured_destination_number, send_main_menu, send_skin_list, send_text, whatsapp_enabled
 
 
 class RegisterView(APIView):
@@ -283,7 +275,6 @@ class QRCodeOptionsView(APIView):
 def scan_landing(request, short_code):
     import json
     from html import escape
-    from urllib.parse import quote
 
     from django.conf import settings
     from django.http import HttpResponse
@@ -306,18 +297,6 @@ def scan_landing(request, short_code):
         api_base = request.build_absolute_uri("/").rstrip("/")
     track_url = f"{api_base}/api/track/{short_code}/"
     redirect_to = qr.redirect_url
-    # Different approach: if QR redirect is a WhatsApp deep link, proactively send menu to that destination
-    # and redirect user to configured bot chat number (if provided) so conversation starts in bot thread.
-    if whatsapp_enabled():
-        wa_dest = extract_whatsapp_number(redirect_to)
-        if wa_dest:
-            r = send_main_menu(wa_dest)
-            if not r.get("ok"):
-                print("scan_landing_whatsapp_menu_failed:", r)
-            bot_chat = "".join(ch for ch in getattr(settings, "WHATSAPP_CLICK_TO_CHAT_NUMBER", "") if ch.isdigit())
-            if bot_chat:
-                text = extract_prefilled_text(redirect_to) or "Hi"
-                redirect_to = f"https://wa.me/{bot_chat}?text={quote(text)}"
     redirect_js = json.dumps(redirect_to)
     redirect_meta = escape(redirect_to, quote=True)
     html = f"""<!DOCTYPE html>
