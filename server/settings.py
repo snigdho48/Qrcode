@@ -68,14 +68,21 @@ TEMPLATES = [
 
 WSGI_APPLICATION = "server.wsgi.application"
 
+# DATABASES = {
+#     'default': {
+#         'ENGINE': 'django.db.backends.mysql',
+#         'NAME': 'qrDB',
+#         'USER': 'snigdho',
+#         'PASSWORD': 'QrDB2026#',
+#         'HOST': '165.22.242.202',
+#         'PORT': '3306',
+#     }
+# }
+
 DATABASES = {
     'default': {
-        'ENGINE': 'django.db.backends.mysql',
-        'NAME': 'qrDB',
-        'USER': 'snigdho',
-        'PASSWORD': 'QrDB2026#',
-        'HOST': '165.22.242.202',
-        'PORT': '3306',
+        'ENGINE': 'django.db.backends.sqlite3',
+        'NAME': BASE_DIR / 'db.sqlite3',
     }
 }
 
@@ -105,6 +112,18 @@ QR_SCAN_REDIRECT_URL = os.environ.get("QR_SCAN_REDIRECT_URL", "https://www.googl
 NOMINATIM_USER_AGENT = os.environ.get(
     "NOMINATIM_USER_AGENT",
     "qr_whatsapp_bot/1.0 (https://github.com/)",
+)
+WHATSAPP_VERIFY_TOKEN = os.environ.get("WHATSAPP_VERIFY_TOKEN", "").strip()
+WHATSAPP_ACCESS_TOKEN = os.environ.get("WHATSAPP_ACCESS_TOKEN", "").strip()
+WHATSAPP_PHONE_NUMBER_ID = os.environ.get("WHATSAPP_PHONE_NUMBER_ID", "").strip()
+WHATSAPP_BUSINESS_NUMBER = os.environ.get("WHATSAPP_BUSINESS_NUMBER", "").strip()
+WHATSAPP_BUSINESS_ACCOUNT_ID = os.environ.get("WHATSAPP_BUSINESS_ACCOUNT_ID", "").strip()
+WHATSAPP_DESTINATION_LINK = os.environ.get("WHATSAPP_DESTINATION_LINK", "").strip()
+WHATSAPP_CLICK_TO_CHAT_NUMBER = os.environ.get("WHATSAPP_CLICK_TO_CHAT_NUMBER", "").strip()
+WHATSAPP_FORCE_DESTINATION_RECIPIENT = os.environ.get("WHATSAPP_FORCE_DESTINATION_RECIPIENT", "true").lower() in (
+    "1",
+    "true",
+    "yes",
 )
 
 REST_FRAMEWORK = {

@@ -22,6 +22,7 @@ from .models import QRCode
 # With ``?ip=<visitor>`` the body is a JSON array of those objects (one per IP). A bare GET returns the *caller's*
 # IP (fine in a browser, wrong if called from Django without ``ip`` — we always pass the client IP).
 GEOJS_IP_GEO_JSON = "https://get.geojs.io/v1/ip/geo.json"
+QR_TARGET_SIZE_PX = 5000
 
 
 DESIGN_CLASSIC = "classic"
@@ -213,6 +214,9 @@ def render_qr_png_bytes(
     qr = qrcode.QRCode(version=None, error_correction=ec, box_size=10, border=4)
     qr.add_data(url)
     qr.make(fit=True)
+    module_count_with_border = (qr.modules_count or 0) + (qr.border * 2)
+    if module_count_with_border > 0:
+        qr.box_size = max(1, QR_TARGET_SIZE_PX // module_count_with_border)
 
     if design == DESIGN_CLASSIC:
         img = qr.make_image(
@@ -238,6 +242,10 @@ def render_qr_png_bytes(
 
     pil_img = _pil_from_qr_image(img)
 
+    if pil_img.size != (QR_TARGET_SIZE_PX, QR_TARGET_SIZE_PX):
+        # Keep edges crisp for scanners; avoid blur from anti-aliased scaling.
+        pil_img = pil_img.resize((QR_TARGET_SIZE_PX, QR_TARGET_SIZE_PX), Image.Resampling.NEAREST)
+
     if design == DESIGN_DOTTED_TEAL and logo_bytes:
         pil_img = paste_logo_center(pil_img, logo_bytes)
 
@@ -260,7 +268,7 @@ def build_qr_png_base64(
 
 
 def generate_qr_image_file(qr: QRCode) -> None:
-    """Save a PNG of the tracking link to ``qr.qr_image`` when ``PUBLIC_BASE_URL`` is set."""
+    """Save a high-resolution (5000x5000) PNG of the tracking link to ``qr.qr_image``."""
     from django.conf import settings
     from django.core.files.base import ContentFile
 

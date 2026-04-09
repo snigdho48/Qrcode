@@ -4,6 +4,7 @@ from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 from . import views
 
 urlpatterns = [
+    path("webhook/", views.whatsapp_webhook, name="whatsapp_webhook_api"),
     path("auth/register/", views.RegisterView.as_view(), name="register"),
     path("auth/token/", TokenObtainPairView.as_view(), name="token_obtain_pair"),
     path("auth/token/refresh/", TokenRefreshView.as_view(), name="token_refresh"),
@@ -14,5 +15,6 @@ urlpatterns = [
     path("analytics/report/", views.AnalyticsReportView.as_view(), name="analytics_report"),
     path("analytics/meta/", views.AnalyticsMetaView.as_view(), name="analytics_meta"),
     path("analytics/qrcode-options/", views.QRCodeOptionsView.as_view(), name="analytics_qrcode_options"),
+    path("whatsapp/manual-menu/", views.whatsapp_manual_menu, name="whatsapp_manual_menu"),
     path("track/<str:short_code>/", views.track_scan, name="track_scan"),
 ]

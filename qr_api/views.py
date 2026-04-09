@@ -1,9 +1,13 @@
 from datetime import timedelta
+import json
 
+from django.conf import settings
 from django.contrib.auth.models import User
 from django.core.paginator import Paginator
 from django.db.models import Count, Max, Q
+from django.http import JsonResponse
 from django.shortcuts import get_object_or_404
+from django.views.decorators.csrf import csrf_exempt
 from django.utils import timezone
 from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
@@ -27,6 +31,15 @@ from .serializers import (
     QRCodeWriteSerializer,
     ScanEventSerializer,
     UserRegisterSerializer,
+)
+from .whatsapp import (
+    configured_destination_number,
+    extract_prefilled_text,
+    extract_whatsapp_number,
+    send_main_menu,
+    send_skin_list,
+    send_text,
+    whatsapp_enabled,
 )
 
 
@@ -270,6 +283,7 @@ class QRCodeOptionsView(APIView):
 def scan_landing(request, short_code):
     import json
     from html import escape
+    from urllib.parse import quote
 
     from django.conf import settings
     from django.http import HttpResponse
@@ -292,6 +306,18 @@ def scan_landing(request, short_code):
         api_base = request.build_absolute_uri("/").rstrip("/")
     track_url = f"{api_base}/api/track/{short_code}/"
     redirect_to = qr.redirect_url
+    # Different approach: if QR redirect is a WhatsApp deep link, proactively send menu to that destination
+    # and redirect user to configured bot chat number (if provided) so conversation starts in bot thread.
+    if whatsapp_enabled():
+        wa_dest = extract_whatsapp_number(redirect_to)
+        if wa_dest:
+            r = send_main_menu(wa_dest)
+            if not r.get("ok"):
+                print("scan_landing_whatsapp_menu_failed:", r)
+            bot_chat = "".join(ch for ch in getattr(settings, "WHATSAPP_CLICK_TO_CHAT_NUMBER", "") if ch.isdigit())
+            if bot_chat:
+                text = extract_prefilled_text(redirect_to) or "Hi"
+                redirect_to = f"https://wa.me/{bot_chat}?text={quote(text)}"
     redirect_js = json.dumps(redirect_to)
     redirect_meta = escape(redirect_to, quote=True)
     html = f"""<!DOCTYPE html>
@@ -449,3 +475,139 @@ def track_scan(request, short_code):
         client_meta=ser.validated_data.get("client_meta") or {},
     )
     return Response({"ok": True})
+
+
+@csrf_exempt
+def whatsapp_webhook(request):
+    def _handle_text_choice(user: str, text: str) -> bool:
+        t = (text or "").strip().lower()
+        if not t:
+            return False
+        if t in {"1", "product", "product for you", "menu"}:
+            r = send_skin_list(user)
+            _report(r, "text_product_to_skin_list")
+            if not r.get("ok"):
+                _report(
+                    send_text(user, "Skin issues: acne, dark, pigment, dry. Reply with one keyword."),
+                    "text_product_to_skin_list_fallback",
+                )
+            return True
+        if t in {"2", "consult", "consultation"}:
+            _report(send_text(user, "Our expert will contact you soon."), "text_consult")
+            return True
+        if t in {"3", "info", "all you need"}:
+            _report(send_text(user, "Visit our website: https://qr.niayouthfulglow.com"), "text_info")
+            return True
+        if t in {"acne", "dry", "dark", "pigment"}:
+            if t == "acne":
+                _report(send_text(user, "For acne-prone skin: use salicylic acid and keep skin hydrated."), "text_acne")
+            elif t == "dark":
+                _report(
+                    send_text(user, "For dark circles: use caffeine eye serum and maintain regular sleep."),
+                    "text_dark",
+                )
+            elif t == "pigment":
+                _report(send_text(user, "For pigmentation: use vitamin C in daytime and sunscreen daily."), "text_pigment")
+            elif t == "dry":
+                _report(send_text(user, "For dry skin: use ceramide moisturizer and gentle cleanser."), "text_dry")
+            return True
+        return False
+
+    def _report(result: dict, label: str) -> None:
+        if result.get("ok"):
+            return
+        print(f"whatsapp_send_failed[{label}]:", result)
+
+    if request.method == "GET":
+        from django.http import HttpResponse as RawResponse
+
+        verify_token = request.GET.get("hub.verify_token")
+        challenge = request.GET.get("hub.challenge")
+        if verify_token and verify_token == settings.WHATSAPP_VERIFY_TOKEN:
+            return RawResponse(challenge, content_type="text/plain", status=200)
+        return RawResponse("Invalid token", content_type="text/plain", status=403)
+
+    if request.method != "POST":
+        return JsonResponse({"error": "method_not_allowed"}, status=405)
+
+    try:
+        payload = json.loads(request.body.decode("utf-8"))
+    except (ValueError, UnicodeDecodeError):
+        return JsonResponse({"status": "ok"}, status=200)
+
+    try:
+        value = payload.get("entry", [])[0].get("changes", [])[0].get("value", {})
+        messages = value.get("messages") or []
+        if not messages:
+            return JsonResponse({"status": "ok"}, status=200)
+
+        msg = messages[0]
+        user = msg.get("from")
+        if settings.WHATSAPP_FORCE_DESTINATION_RECIPIENT:
+            forced_to = configured_destination_number()
+            if forced_to:
+                user = forced_to
+        if not user or not whatsapp_enabled():
+            return JsonResponse({"status": "ok"}, status=200)
+
+        if msg.get("type") == "text":
+            txt = (msg.get("text") or {}).get("body", "")
+            if not _handle_text_choice(user, txt):
+                r = send_main_menu(user)
+                _report(r, "main_menu")
+                if not r.get("ok"):
+                    _report(send_text(user, "Reply with: 1) Product  2) Consultation  3) Info"), "main_menu_fallback")
+            return JsonResponse({"status": "ok"}, status=200)
+
+        if msg.get("type") != "interactive":
+            return JsonResponse({"status": "ok"}, status=200)
+
+        interactive = msg.get("interactive") or {}
+        if "button_reply" in interactive:
+            selected = (interactive.get("button_reply") or {}).get("id")
+            if selected == "product":
+                r = send_skin_list(user)
+                _report(r, "skin_list")
+                if not r.get("ok"):
+                    _report(
+                        send_text(user, "Skin issues: acne, dark, pigment, dry. Reply with one keyword."),
+                        "skin_list_fallback",
+                    )
+            elif selected == "consult":
+                _report(send_text(user, "Our expert will contact you soon."), "consult")
+            elif selected == "info":
+                _report(send_text(user, "Visit our website: https://qr.niayouthfulglow.com"), "info")
+            return JsonResponse({"status": "ok"}, status=200)
+
+        if "list_reply" in interactive:
+            selected = (interactive.get("list_reply") or {}).get("id")
+            if selected == "acne":
+                _report(send_text(user, "For acne-prone skin: use salicylic acid and keep skin hydrated."), "acne")
+            elif selected == "dark":
+                _report(
+                    send_text(user, "For dark circles: use caffeine eye serum and maintain regular sleep."),
+                    "dark",
+                )
+            elif selected == "pigment":
+                _report(send_text(user, "For pigmentation: use vitamin C in daytime and sunscreen daily."), "pigment")
+            elif selected == "dry":
+                _report(send_text(user, "For dry skin: use ceramide moisturizer and gentle cleanser."), "dry")
+    except Exception as e:
+        print("whatsapp_webhook_error:", e)
+
+    return JsonResponse({"status": "ok"}, status=200)
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def whatsapp_manual_menu(request):
+    to = (request.data.get("to") or "").strip() or configured_destination_number()
+    if not to:
+        return Response({"detail": "Missing recipient number. Configure destination link/number or pass 'to'."}, status=400)
+    if not whatsapp_enabled():
+        return Response({"detail": "WhatsApp is not configured."}, status=400)
+    result = send_main_menu(to)
+    if not result.get("ok"):
+        print("whatsapp_manual_menu_failed:", result)
+        return Response({"ok": False, "send_result": result}, status=502)
+    return Response({"ok": True, "to": to, "send_result": result})

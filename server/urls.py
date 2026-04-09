@@ -3,11 +3,12 @@ from django.conf.urls.static import static
 from django.contrib import admin
 from django.urls import include, path
 
-from qr_api.views import scan_landing
+from qr_api.views import scan_landing, whatsapp_webhook
 
 urlpatterns = [
     path("admin/", admin.site.urls),
     path("api/", include("qr_api.urls")),
+    path("webhook/", whatsapp_webhook, name="whatsapp_webhook"),
     path("s/<str:short_code>/", scan_landing, name="scan_landing"),
 ]
 
